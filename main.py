@@ -4,6 +4,10 @@ import numpy as np
 import random
 
 
+
+illegalSymbols ={"@","|","_","-",">","<","=","+","$","#","%","^","*","/","\\","~","`","...","(",")","[","]","{","}","com","gov","org","edu"}
+
+
 def cleanText(filePath):
 	file = open(filePath)
 	text = file.read()
@@ -11,24 +15,29 @@ def cleanText(filePath):
 	#Remove email headers - we don't want to generate a random string with an email header, 
 	#nor are they relevant in the context of a sentence
 	# scikit learn might be better for this: http://scikit-learn.org/stable/datasets/#the-20-newsgroups-text-dataset
-	try:
-		startSubjectIdentifier = "Subject : Re : "
-		startSubject = text.index("Subject : Re : ") + len(startSubjectIdentifier)
-		endSubject = text.index("In article")
+	startBodyIdentifier = "writes :";
+	bodyStart = max(text.rfind("writes :"), text.rfind("wrote :"), text.rfind("Subject :"), text.rfind("Re : "))
+	startBody = text.rfind(startBodyIdentifier) + len(startBodyIdentifier)
 
-		startBodyIdentifier = "writes :";
-		startBody = text.index(startBodyIdentifier) + len(startBodyIdentifier)
-	except:
-		startSubject = 0
-		endSubject = 0
-		startBody = 0
-
-	newText = text[startSubject:endSubject] + text[startBody:]
+	newText = text[startBody:]
 	return newText
 
+def isLegal(token, illegalSymbols):
+	for symbol in illegalSymbols:
+		if symbol in token:
+			return False
+	return True
+
+def getTokens(corpus):
+	tokens = word_tokenize(corpus)
+	legalTokens = []
+	for token in tokens:
+		if isLegal(token, illegalSymbols):
+			legalTokens.append(token)
+	return legalTokens
 
 def getBigrams(corpus):
-	tokens = word_tokenize(corpus)
+	tokens = getTokens(corpus)
 	bigrams = {}
 	prev = "unk"
 	for token in tokens: 
@@ -39,6 +48,38 @@ def getBigrams(corpus):
 		bigrams[prev][token] = bigrams[prev][token] + 1
 		prev = token
 	return bigrams
+
+def getUnigrams(corpus):
+	tokens = getTokens(corpus)
+	unigrams = {}
+	for token in tokens: 
+		if(token not in unigrams): 
+			unigrams[token] = 1
+		else:
+			unigrams[token] += 1
+	return unigrams
+
+def getUniProbs(corpus):
+	unigrams = getUnigrams(corpus)
+	total = 0
+	for unigram in unigrams.values():
+		total += unigram
+
+	total = float(total)
+	probs = []
+	for unigram in unigrams.values():
+		probs.append(unigram/total)
+	return probs
+
+def randomSentenceUnigrams(corpus):
+	unigrams = getUnigrams(corpus)
+	probs = getUniProbs(corpus)
+	output = ""
+	current = unigrams.keys()[random.randint(0,len(unigrams) - 1)] #make this use a common word as the first
+	while current != ".":
+		current = np.random.choice(unigrams.keys(), 1, p=probs)[0]
+		output += " " + current
+	return output
 
 
 def bigramProb(first, second):
@@ -51,7 +92,7 @@ def bigramProb(first, second):
 		return 0
 
 
-def randomSentence(bigrams):
+def randomSentenceBigrams(bigrams):
 	startTokens = bigrams['.'].keys()
 	randomStartIndex = random.randint(0, len(startTokens) - 1)
 	current = startTokens[randomStartIndex]
@@ -68,6 +109,12 @@ def randomSentence(bigrams):
 		current = token
 	return output
 
+def randomSentence(corpus, isUnigram):
+	if isUnigram:
+		return randomSentenceUnigrams(corpus)
+	else:
+		return randomSentenceBigrams(getBigrams(corpus))
+
 
 
 def main():
@@ -80,11 +127,6 @@ def main():
 		corpus = ""
 		for filename in listdir(directory):
 			corpus = corpus + cleanText(directory + '/' + filename)
-		bigrams = getBigrams(corpus)
-		print randomSentence(bigrams)
+		#print randomSentence(corpus, False)
+		print randomSentence(corpus, True)
 main()
-
-
-
-
-
